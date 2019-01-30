@@ -1,0 +1,10 @@
+[package]
+name = "rayt"
+version = "0.1.0"
+authors = ["Ext-Y.Gerasimov <yuriy.gerasimov@firstlinesoftware.com>"]
+edition = "2018"
+
+[dependencies]
+png="*"
+regex = "1"
+nalgebra = "0.16"
