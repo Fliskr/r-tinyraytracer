@@ -117,9 +117,9 @@ fn main() {
             let endf: &[f32] = ray.as_slice();
             let end = &endf[..];
             let mut vec_part = vec![
-                (end[0] * 255.0) as u8,
-                (end[1] * 255.0) as u8,
-                (end[2] * 255.0) as u8,
+                (1f32.min(end[0]) * 255.0) as u8,
+                (1f32.min(end[1]) * 255.0) as u8,
+                (1f32.min(end[2]) * 255.0) as u8,
                 255_u8,
             ];
             vec.append(&mut vec_part);

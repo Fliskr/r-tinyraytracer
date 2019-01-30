@@ -3,27 +3,15 @@ extern crate nalgebra as na;
 use na::Vector3;
 use png::HasParameters;
 use regex::Regex;
-use std::f64::consts::PI;
-use std::f64::MAX;
+use std::f32::consts::PI;
+use std::f32::MAX;
 use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 use std::vec::Vec;
 
-macro_rules! max {
-    ($x: expr) => ($x);
-    ($x: expr, $($z: expr),+) => {{
-        let y = max!($($z),*);
-        if $x > y {
-            $x
-        } else {
-            y
-        }
-    }}
-}
-
-pub type Vec3 = Vector3<f64>;
+pub type Vec3 = Vector3<f32>;
 
 fn main() {
     let paths = fs::read_dir("./images/").unwrap();
@@ -46,7 +34,7 @@ fn main() {
     let ref mut w = BufWriter::new(file);
     let width = 1024;
     let height = 768;
-    let fov: f64 = PI / 2.0;
+    let fov: f32 = PI / 2.0;
     let mut encoder = png::Encoder::new(w, width as u32, height as u32);
     encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header().unwrap();
@@ -107,15 +95,15 @@ fn main() {
     let mut vec: Vec<u8> = Vec::new();
     for j in 0..height {
         for i in 0..width {
-            let height = f64::from(height);
-            let width = f64::from(width);
-            let i = f64::from(i);
-            let j = f64::from(j);
-            // let dir_x: f64 = (i + 0.5) - width / 2.0;
-            // let dir_y: f64 = -(j + 0.5) + height / 2.0;
-            // let dir_z: f64 = -height / (2.0 * (fov / 2.0).tan());
-            let x: f64 = (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
-            let y: f64 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
+            let height: f32 = height as f32;
+            let width:f32= width as f32;
+            let i = i as f32;
+            let j = j as f32;
+            // let dir_x: f32 = (i + 0.5) - width / 2.0;
+            // let dir_y: f32 = -(j + 0.5) + height / 2.0;
+            // let dir_z: f32 = -height / (2.0 * (fov / 2.0).tan());
+            let x: f32 = (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
+            let y: f32 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
             let dir: Vec3 = Vec3::new(x, y, -1.0).normalize();
             // let dir: Vec3 = Vec3::new(dir_x, dir_y, dir_z).normalize();
 
@@ -126,12 +114,12 @@ fn main() {
                 lights.clone(),
                 0,
             );
-            let endf: &[f64] = ray.as_slice();
+            let endf: &[f32] = ray.as_slice();
             let end = &endf[..];
             let mut vec_part = vec![
-                (end[0] * 255.0) as u8,
-                (end[1] * 255.0) as u8,
-                (end[2] * 255.0) as u8,
+                (1f32.min(end[0]) * 255.0) as u8,
+                (1f32.min(end[1]) * 255.0) as u8,
+                (1f32.min(end[2]) * 255.0) as u8,
                 255_u8,
             ];
             vec.append(&mut vec_part);
@@ -145,7 +133,7 @@ pub type Lights = Vec<Light>;
 #[derive(Clone, Copy)]
 pub struct Sphere {
     pub center: Vec3,
-    pub radius: f64,
+    pub radius: f32,
     pub material: Material,
 }
 
@@ -153,19 +141,19 @@ pub struct Sphere {
 pub struct Material {
     pub diffuse_color: Vec3,
     pub albedo: Vec3,
-    pub specular_exponent: f64,
+    pub specular_exponent: f32,
 }
 
 #[derive(Clone, Copy)]
 pub struct Light {
     pub position: Vec3,
-    pub intensity: f64,
+    pub intensity: f32,
 }
 
 impl Sphere {
-    pub fn ray_intersect(&self, orig: Vec3, dir: Vec3, t0: &mut f64) -> bool {
+    pub fn ray_intersect(&self, orig: Vec3, dir: Vec3, t0: &mut f32) -> bool {
         let l: Vec3 = self.center - orig;
-        let tca: f64 = l.dot(&dir);
+        let tca: f32 = l.dot(&dir);
         let d2 = l.dot(&l) - tca.powf(2.0); // * tca;
         let r2 = self.radius.powf(2.0); // * self.radius;
         if d2 > r2 {
@@ -205,12 +193,12 @@ pub fn cast_ray(orig: Vec3, dir: Vec3, spheres: Spheres, lights: Lights, depth: 
         return Vec3::new(0.2, 0.7, 0.8);
     }
 
-    let reflect_dir: Vec3 = reflect(dir, n).normalize();
+    let reflect_dir: Vec3 = reflect(&dir, &n).normalize();
     let reflect_orig: Vec3;
     if reflect_dir.dot(&n) < 0.0 {
-        reflect_orig = point - n * 1e-3;
+        reflect_orig = point - n * 1e-2;
     } else {
-        reflect_orig = point + n * 1e-3;
+        reflect_orig = point + n * 1e-2;
     }
     let reflect_color = cast_ray(
         reflect_orig,
@@ -224,13 +212,13 @@ pub fn cast_ray(orig: Vec3, dir: Vec3, spheres: Spheres, lights: Lights, depth: 
     let mut specular_light_intensity = 0.0;
     for light in lights {
         let light_dir: Vec3 = (light.position - point).normalize();
-        let light_distance: f64 = (light.position - point).norm();
+        let light_distance: f32 = (light.position - point).norm();
 
         let shadow_orig: Vec3;
         if light_dir.dot(&n) < 0.0 {
-            shadow_orig = point - n * 1e-3;
+            shadow_orig = point - n * 1e-2;
         } else {
-            shadow_orig = point + n * 1e-3
+            shadow_orig = point + n * 1e-2
         };
         let mut shadow_pt = Vec3::new(0.0, 0.0, 0.0);
         let mut shadow_n = Vec3::new(0.0, 0.0, 0.0);
@@ -251,8 +239,8 @@ pub fn cast_ray(orig: Vec3, dir: Vec3, spheres: Spheres, lights: Lights, depth: 
             continue;
         }
 
-        diffuse_light_intensity += light.intensity * max!(0.0_f64, light_dir.dot(&n));
-        specular_light_intensity += (max!(0.0, -reflect(-light_dir, n).dot(&dir)))
+        diffuse_light_intensity += light.intensity * 0f32.max(light_dir.dot(&n));
+        specular_light_intensity += 0f32.max(-reflect(&(-light_dir), &n).dot(&dir))
             .powf(material.specular_exponent)
             * light.intensity;
     }
@@ -271,7 +259,7 @@ pub fn scene_intersect(
 ) -> bool {
     let mut spheres_dist = MAX;
     for sphere in spheres {
-        let mut dist_i: f64 = 0.0;
+        let mut dist_i: f32 = 0.0;
         if sphere.ray_intersect(orig.clone(), dir.clone(), &mut dist_i) && dist_i < spheres_dist {
             spheres_dist = dist_i;
             *hit = orig + dir * dist_i;
@@ -282,8 +270,6 @@ pub fn scene_intersect(
     return spheres_dist < 1000.0;
 }
 
-pub fn reflect(i: Vec3, n: Vec3) -> Vec3 {
-    let z = n * 2.0;
-    let x = i.dot(&n);
-    i - z * x
+pub fn reflect(i: &Vec3, n: &Vec3) -> Vec3 {
+    i - n * 2.0 * i.dot(&n)
 }
