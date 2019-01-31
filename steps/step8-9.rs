@@ -8,10 +8,8 @@ use std::f32::MAX;
 use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
-use std::mem::swap;
 use std::path::Path;
-use std::sync::mpsc;
-use std::thread;
+use std::mem::swap;
 use std::vec::Vec;
 
 pub type Vec3 = Vector3<f32>;
@@ -37,8 +35,6 @@ fn main() {
     let ref mut w = BufWriter::new(file);
     let width = 1024;
     let height = 768;
-    // let width = 4;
-    // let height = 4;
     let fov: f32 = PI / 2.0;
     let mut encoder = png::Encoder::new(w, width as u32, height as u32);
     encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
@@ -107,66 +103,38 @@ fn main() {
     ];
 
     let mut vec: Vec<u8> = Vec::new();
-    let (tx, rx) = mpsc::channel();
-    let threads = 4;
-    let mut vecs: Vec<Vec<u8>> = vec![vec![];threads];
-    for k in 0..threads {
-        let rest_height = height / threads;
-        let start = k + rest_height * k;
-        let end = k + rest_height * (k + 1);
-        let tx1 = mpsc::Sender::clone(&tx);
-        let spheres = spheres.clone();
-        let lights = lights.clone();
-        thread::spawn(move || {
-            println!("thread:{}", k);
-            for j in start..end {
-                for i in 0..width {
-                    let height: f32 = height as f32;
-                    let width: f32 = width as f32;
-                    let i = i as f32;
-                    let j = j as f32;
-                    // let dir_x: f32 = (i + 0.5) - width / 2.0;
-                    // let dir_y: f32 = -(j + 0.5) + height / 2.0;
-                    // let dir_z: f32 = -height / (2.0 * (fov / 2.0).tan());
-                    let x: f32 =
-                        (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
-                    let y: f32 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
-                    let dir: Vec3 = Vec3::new(x, y, -1.0).normalize();
-                    // let dir: Vec3 = Vec3::new(dir_x, dir_y, dir_z).normalize();
+    for j in 0..height {
+        for i in 0..width {
+            let height: f32 = height as f32;
+            let width: f32 = width as f32;
+            let i = i as f32;
+            let j = j as f32;
+            // let dir_x: f32 = (i + 0.5) - width / 2.0;
+            // let dir_y: f32 = -(j + 0.5) + height / 2.0;
+            // let dir_z: f32 = -height / (2.0 * (fov / 2.0).tan());
+            let x: f32 = (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
+            let y: f32 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
+            let dir: Vec3 = Vec3::new(x, y, -1.0).normalize();
+            // let dir: Vec3 = Vec3::new(dir_x, dir_y, dir_z).normalize();
 
-                    let ray = cast_ray(
-                        Vec3::new(0.0, 0.0, 0.0),
-                        dir,
-                        spheres.clone(),
-                        lights.clone(),
-                        0,
-                    );
-                    let val = (
-                        (1f32.min(ray.x) * 255.0) as u8,
-                        (1f32.min(ray.y) * 255.0) as u8,
-                        (1f32.min(ray.z) * 255.0) as u8,
-                        k,
-                    );
-                    tx1.send(val).unwrap();
-                }
-            }
-            println!("thread:{} ended", k);
-        });
+            let ray = cast_ray(
+                Vec3::new(0.0, 0.0, 0.0),
+                dir,
+                spheres.clone(),
+                lights.clone(),
+                0,
+            );
+            let endf: &[f32] = ray.as_slice();
+            let end = &endf[..];
+            let mut vec_part = vec![
+                (1f32.min(end[0]) * 255.0) as u8,
+                (1f32.min(end[1]) * 255.0) as u8,
+                (1f32.min(end[2]) * 255.0) as u8,
+                255_u8,
+            ];
+            vec.append(&mut vec_part);
+        }
     }
-    for _ in 0..(width * height) {
-        let (a, b, c, k) = rx.recv().unwrap();
-        let vec_part:Vec<u8> = vec![
-            a,
-            b,
-            c,
-            255u8,
-        ];
-        vecs[k].extend(vec_part.clone());
-    }
-    for vc in vecs {
-        vec.append(&mut vc.clone());
-    }
-
     writer.write_image_data(&vec.as_slice()).unwrap(); // Save
 }
 
@@ -328,24 +296,7 @@ pub fn scene_intersect(
             *material = sphere.material;
         }
     }
-    let mut checkerboard_dist = MAX;
-    if dir.y.abs() > 1e-3 {
-        let d = -(orig.y + 4.0) / dir.y;
-        let pt = orig + dir * d;
-        let z = pt.z < -10f32 && pt.z > -30f32;
-        if d > 0f32 && pt.x.abs() < 10f32 && z && d < spheres_dist {
-            checkerboard_dist = d;
-            *hit = pt;
-            *n = Vec3::new(0f32, 1f32, 0f32);
-            if (((0.5 * hit.x + 1000.0) as i32) + ((0.5 * hit.z) as i32) & 1) == 1 {
-                material.diffuse_color = Vec3::new(0.3, 0.3, 0.3);
-            } else {
-                material.diffuse_color = Vec3::new(0.3, 0.8 * 0.3, 0.3 * 0.3);
-            }
-            // *material.diffuse_color = material.diffuse_color * 0.3;
-        }
-    }
-    spheres_dist.min(checkerboard_dist) < 1000.0
+    return spheres_dist < 1000.0;
 }
 
 pub fn reflect(i: &Vec3, n: &Vec3) -> Vec3 {
@@ -359,7 +310,7 @@ pub fn refract(i: &Vec3, n: &Vec3, refractive_index: f32) -> Vec3 {
     let mut nn = n.clone();
     if cosi < 0f32 {
         cosi = -cosi;
-        swap(&mut etai, &mut etat);
+        swap(&mut etai,&mut  etat);
         nn = -n.clone();
     }
     let eta = etai / etat;

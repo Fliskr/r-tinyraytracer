@@ -342,7 +342,6 @@ pub fn scene_intersect(
             } else {
                 material.diffuse_color = Vec3::new(0.3, 0.8 * 0.3, 0.3 * 0.3);
             }
-            // *material.diffuse_color = material.diffuse_color * 0.3;
         }
     }
     spheres_dist.min(checkerboard_dist) < 1000.0

@@ -37,8 +37,6 @@ fn main() {
     let ref mut w = BufWriter::new(file);
     let width = 1024;
     let height = 768;
-    // let width = 4;
-    // let height = 4;
     let fov: f32 = PI / 2.0;
     let mut encoder = png::Encoder::new(w, width as u32, height as u32);
     encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
@@ -106,67 +104,54 @@ fn main() {
         },
     ];
 
-    let mut vec: Vec<u8> = Vec::new();
+    let size = height * width * 4;
+    let mut vec: Vec<u8> = vec![0; size];
     let (tx, rx) = mpsc::channel();
-    let threads = 4;
-    let mut vecs: Vec<Vec<u8>> = vec![vec![];threads];
-    for k in 0..threads {
-        let rest_height = height / threads;
-        let start = k + rest_height * k;
-        let end = k + rest_height * (k + 1);
+    for j in 0..height {
         let tx1 = mpsc::Sender::clone(&tx);
         let spheres = spheres.clone();
         let lights = lights.clone();
-        thread::spawn(move || {
-            println!("thread:{}", k);
-            for j in start..end {
-                for i in 0..width {
-                    let height: f32 = height as f32;
-                    let width: f32 = width as f32;
-                    let i = i as f32;
-                    let j = j as f32;
-                    // let dir_x: f32 = (i + 0.5) - width / 2.0;
-                    // let dir_y: f32 = -(j + 0.5) + height / 2.0;
-                    // let dir_z: f32 = -height / (2.0 * (fov / 2.0).tan());
-                    let x: f32 =
-                        (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
-                    let y: f32 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
-                    let dir: Vec3 = Vec3::new(x, y, -1.0).normalize();
-                    // let dir: Vec3 = Vec3::new(dir_x, dir_y, dir_z).normalize();
+        let handle = thread::spawn(move || {
+            for i in 0..width {
+                let pos = (j + i * j) as usize;
+                let height: f32 = height as f32;
+                let width: f32 = width as f32;
+                let i = i as f32;
+                let j = j as f32;
+                // let dir_x: f32 = (i + 0.5) - width / 2.0;
+                // let dir_y: f32 = -(j + 0.5) + height / 2.0;
+                // let dir_z: f32 = -height / (2.0 * (fov / 2.0).tan());
+                let x: f32 = (2.0 * (i + 0.5) / width - 1.0) * (fov / 2.0).tan() * width / height;
+                let y: f32 = -(2.0 * (j + 0.5) / height - 1.0) * (fov / 2.0).tan();
+                let dir: Vec3 = Vec3::new(x, y, -1.0).normalize();
+                // let dir: Vec3 = Vec3::new(dir_x, dir_y, dir_z).normalize();
 
-                    let ray = cast_ray(
-                        Vec3::new(0.0, 0.0, 0.0),
-                        dir,
-                        spheres.clone(),
-                        lights.clone(),
-                        0,
-                    );
-                    let val = (
-                        (1f32.min(ray.x) * 255.0) as u8,
-                        (1f32.min(ray.y) * 255.0) as u8,
-                        (1f32.min(ray.z) * 255.0) as u8,
-                        k,
-                    );
-                    tx1.send(val).unwrap();
-                }
+                let ray = cast_ray(
+                    Vec3::new(0.0, 0.0, 0.0),
+                    dir,
+                    spheres.clone(),
+                    lights.clone(),
+                    0,
+                );
+                let val = (
+                    1f32.min(ray.x * 255.0) as u8,
+                    1f32.min(ray.y * 255.0) as u8,
+                    1f32.min(ray.z * 255.0) as u8,
+                    pos,
+                );
+                tx1.send(val).unwrap();
             }
-            println!("thread:{} ended", k);
         });
-    }
-    for _ in 0..(width * height) {
-        let (a, b, c, k) = rx.recv().unwrap();
-        let vec_part:Vec<u8> = vec![
-            a,
-            b,
-            c,
-            255u8,
-        ];
-        vecs[k].extend(vec_part.clone());
-    }
-    for vc in vecs {
-        vec.append(&mut vc.clone());
-    }
+        handle.join().unwrap();
+            for i in 0..width {
 
+            let (a, b, c, pos) = rx.recv().unwrap(); 
+                    vec[pos] = a;
+            vec[pos + 1] = b;
+            vec[pos + 2] = c;
+            vec[pos + 3] = 255u8;
+            }
+    }
     writer.write_image_data(&vec.as_slice()).unwrap(); // Save
 }
 
